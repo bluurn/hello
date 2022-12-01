@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    env, fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
     thread,
@@ -8,9 +8,37 @@ use std::{
 
 use threadpool::ThreadPool;
 
+fn fetch_env(key: &str, default: &str) -> String {
+    match env::var(key) {
+        Ok(key) => key,
+        Err(_) => String::from(default),
+    }
+}
+
+struct Config {
+    address: String,
+    pool_size: usize,
+}
+
+impl Config {
+    fn new() -> Config {
+        let host = fetch_env("HOST", "0.0.0.0");
+        let port = fetch_env("PORT", "1337").parse().unwrap_or(1337);
+        let address = format!("{}:{}", host, port);
+        let pool_size: usize = fetch_env("POOL_SIZE", "4").parse().unwrap_or(4);
+        Config { address, pool_size }
+    }
+}
+
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let pool = ThreadPool::new(4);
+    let config = Config::new();
+    let listener = TcpListener::bind(&config.address).unwrap();
+    let pool = ThreadPool::new(config.pool_size);
+
+    println!(
+        "http://{}/ started ({} threads)",
+        &config.address, &config.pool_size
+    );
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
