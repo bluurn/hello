@@ -1,44 +1,55 @@
 use std::{
-    env, fs,
+    fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
     thread,
     time::Duration,
 };
 
+use serde::Deserialize;
 use threadpool::ThreadPool;
 
-fn fetch_env(key: &str, default: &str) -> String {
-    match env::var(key) {
-        Ok(key) => key,
-        Err(_) => String::from(default),
-    }
+fn default_port() -> u16 {
+    1337
 }
 
-struct Config {
-    address: String,
+fn default_host() -> String {
+    String::from("0.0.0.0")
+}
+
+fn default_pool_size() -> usize {
+    4
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Config {
+    #[serde(default = "default_port")]
+    port: u16,
+    #[serde(default = "default_host")]
+    host: String,
+    #[serde(default = "default_pool_size")]
     pool_size: usize,
 }
 
 impl Config {
-    fn new() -> Config {
-        let host = fetch_env("HOST", "0.0.0.0");
-        let port = fetch_env("PORT", "1337").parse().unwrap_or(1337);
-        let address = format!("{}:{}", host, port);
-        let pool_size: usize = fetch_env("POOL_SIZE", "4").parse().unwrap_or(4);
-        Config { address, pool_size }
+    pub fn addr(&self) -> String {
+        format!("{}:{}", &self.host, &self.port)
     }
 }
 
 fn main() {
-    let config = Config::new();
-    let listener = TcpListener::bind(&config.address).unwrap();
+    let config = envy::from_env::<Config>().unwrap();
+
+    let listener = TcpListener::bind(&config.addr()).unwrap();
     let pool = ThreadPool::new(config.pool_size);
 
     println!(
-        "http://{}/ started ({} threads)",
-        &config.address, &config.pool_size
+        "Listening on {}, pool size: {}",
+        config.addr(),
+        config.pool_size
     );
+
+    println!("Click http://{}/ to open it in the browser", config.addr());
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
